@@ -1,0 +1,19 @@
+FROM elixir:1.18-otp-27-alpine
+
+RUN apk add --no-cache build-base git nodejs npm inotify-tools
+
+WORKDIR /app
+
+RUN mix local.hex --force && mix local.rebar --force
+
+COPY mix.exs mix.lock* ./
+RUN mix deps.get
+
+COPY assets/package.json assets/package-lock.json* ./assets/
+RUN if [ -f assets/package.json ]; then npm ci --prefix assets; fi
+
+COPY . .
+
+EXPOSE 4000
+
+CMD ["mix", "phx.server"]

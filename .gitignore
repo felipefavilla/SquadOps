@@ -1,0 +1,36 @@
+# Elixir/Mix
+/_build/
+/cover/
+/deps/
+/doc/
+/.fetch
+erl_crash.dump
+*.ez
+*.beam
+/config/prod.secret.exs
+/config/runtime.exs
+.env
+
+# Phoenix
+/priv/static/assets/
+/priv/static/cache_manifest.json
+
+# Node/Assets
+/assets/node_modules/
+/assets/.node_modules.bak
+
+# Docker
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test coverage
+/cover/
