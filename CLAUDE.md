@@ -160,6 +160,7 @@ LiveViews só conversam com **contextos**. Os contextos é que decidem entre Rep
 | Azure.Boards | `SquadOps.Azure.Boards` | Colunas do board (default `"Stories"`) — usadas como workflow visual do Kanban |
 | Azure.Mock | `SquadOps.Azure.Mock` | Dados falsos no mesmo shape dos módulos reais, para dev sem PAT |
 | Azure.Sync | `SquadOps.Azure.Sync` | Orquestra a sincronização: token → sprints → WIQL → work items → board columns → `Auth.mark_validated/1`. **Resiliente**: grava cada item individualmente (`Repo.insert/update`, sem bang); linha inválida é logada em `SyncLogs` e pulada — não aborta o run. Retorna `work_item_errors` no resumo |
+| Sync.Scheduler | `SquadOps.Sync.Scheduler` | GenServer no supervision tree. A cada 5 min sincroniza squads com token e `sync_policy.auto != false`; faz broadcast em `"sync:status"` (PubSub) p/ a home atualizar ao vivo. Desligado em test (`config :squad_ops, auto_sync: false`); intervalo via `:auto_sync_interval_ms` |
 
 Observação: **não existe `Azure.Batch`** (a versão antiga do CLAUDE.md mencionava). A criação em massa hoje é local (LiveView → `Squads.create_work_item/1`).
 
@@ -215,6 +216,8 @@ Relações: `has_many :sprints`, `has_many :work_items`, `has_one :auth_token`.
 | `azure_id` | string | id do iteration do Azure |
 | `start_date`/`end_date` | date | |
 | `status` | string | `future` (default) / `active` / `past`, index |
+| `kind` | string NOT NULL default `sprint` | `sprint` (tem start+end) / `backlog` (sem datas: backlog/análise), index |
+| `path` | string | iteration path completo no Azure |
 
 ### `work_items`
 | Campo | Tipo | Notas |
@@ -229,6 +232,10 @@ Relações: `has_many :sprints`, `has_many :work_items`, `has_one :auth_token`.
 | `assigned_to` | string | display name |
 | `story_points` | float | >= 0 — Azure manda double (ex.: `0.5`, `13.0`); preservamos fracionário |
 | `priority` | integer default 2 | 1..4 |
+| `area_path` | string | System.AreaPath do Azure, index — usado p/ visões e filtros por Área |
+| `parent_azure_id` | integer | id Azure do pai (Feature/US), index — monta árvore Feature→US→Task |
+| `iteration_path` | string | System.IterationPath completo |
+| `azure_created_at`/`azure_changed_at`/`closed_at` | utc_datetime | datas do Azure p/ KPIs/timeline |
 
 ### `auth_tokens`
 | Campo | Tipo | Notas |
@@ -253,7 +260,7 @@ Relações: `has_many :sprints`, `has_many :work_items`, `has_one :auth_token`.
 | `workflow` | map (JSONB) | transitions, labels, columns (preenchidas pelo sync de boards) |
 | `validations` | map (JSONB) | flags `story_requires_points`, `bug_requires_assignee`, `max_sprint_points`, `block_invalid_transitions` |
 | `field_mapping` | map (JSONB) | mapeia tipos/status do Azure para enums locais |
-| `sync_policy` | map (JSONB) | `mode`, `frequency_minutes`, `scope`, `conflict_resolution` |
+| `sync_policy` | map (JSONB) | `mode`, `auto` (liga/desliga auto-sync, default `true`), `frequency_minutes` (default 5), `scope`, `conflict_resolution` |
 
 Defaults vivem em `SquadOps.Rules` e são *mesclados* com o que está salvo (`merge_defaults/1`).
 
