@@ -57,12 +57,22 @@ defmodule SquadOps.Rules do
     "conflict_resolution" => "azure_wins"
   }
 
+  @default_kpis %{
+    # Status locais que contam como "concluído" para burndown e eficiência.
+    "completed_states" => ["resolved", "closed"],
+    # Tipo local tratado como User Story para o indicador de eficiência.
+    "story_type" => "story",
+    # Dias úteis considerados na linha ideal do burndown.
+    "working_days" => ["mon", "tue", "wed", "thu", "fri"]
+  }
+
   def defaults do
     %{
       workflow: @default_workflow,
       validations: @default_validations,
       field_mapping: @default_field_mapping,
-      sync_policy: @default_sync_policy
+      sync_policy: @default_sync_policy,
+      kpis: @default_kpis
     }
   end
 
@@ -81,7 +91,7 @@ defmodule SquadOps.Rules do
   end
 
   def update_section(%SquadRule{} = rule, section, value)
-      when section in [:workflow, :validations, :field_mapping, :sync_policy] do
+      when section in [:workflow, :validations, :field_mapping, :sync_policy, :kpis] do
     rule
     |> SquadRule.changeset(%{section => value})
     |> Repo.update()
@@ -100,7 +110,8 @@ defmodule SquadOps.Rules do
       | workflow: Map.merge(@default_workflow, rule.workflow || %{}),
         validations: Map.merge(@default_validations, rule.validations || %{}),
         field_mapping: Map.merge(@default_field_mapping, rule.field_mapping || %{}),
-        sync_policy: Map.merge(@default_sync_policy, rule.sync_policy || %{})
+        sync_policy: Map.merge(@default_sync_policy, rule.sync_policy || %{}),
+        kpis: Map.merge(@default_kpis, rule.kpis || %{})
     }
   end
 end

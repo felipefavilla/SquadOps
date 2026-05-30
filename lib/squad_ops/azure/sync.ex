@@ -16,7 +16,7 @@ defmodule SquadOps.Azure.Sync do
 
   import Ecto.Query
 
-  alias SquadOps.{Auth, Azure, Repo, Rules, SyncLogs}
+  alias SquadOps.{Auth, Azure, Kpis, Repo, Rules, SyncLogs}
   alias SquadOps.Squads.{Sprint, WorkItem}
 
   @wiql_active_and_future """
@@ -41,6 +41,7 @@ defmodule SquadOps.Azure.Sync do
            {:ok, item_stats} <- sync_work_items(run_id, token, project, squad, rules),
            {:ok, columns} <- sync_board_columns(run_id, token, project, squad) do
         Auth.mark_validated(squad.id)
+        Kpis.capture_snapshots(squad.id)
 
         {:ok,
          %{

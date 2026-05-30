@@ -152,6 +152,7 @@ LiveViews só conversam com **contextos**. Os contextos é que decidem entre Rep
 | Squads | `SquadOps.Squads` + `Squads.{Squad,Sprint,WorkItem}` | Domínio principal — CRUD de squads, sprints, work items e agregações. Gestão: `list_areas/1`, `list_iterations/2` (kind), `relationship_tree/1` (árvore Feature→US→Task por `parent_azure_id`), `board_columns/1` + `queue_counts/2` (filas Kanban, filtro por área), filtros `area_path`/`sort` em `list_work_items`/`list_all_work_items` |
 | Rules | `SquadOps.Rules` + `Rules.SquadRule` | Regras de negócio por squad em 4 seções JSONB: `workflow`, `validations`, `field_mapping`, `sync_policy`. Faz merge com defaults |
 | SyncLogs | `SquadOps.SyncLogs` + `SyncLogs.SyncLog` | Log persistido das sincronizações (tabela `sync_logs`). Cada run tem `run_id`; helpers `info/warning/error/4`, `list_logs/1`, `clear_logs/1`. Lido pela tela `/logs` |
+| Kpis | `SquadOps.Kpis` + `Squads.SprintSnapshot` | Indicadores: `sprint_metrics/1` (itens/pontos, média/mediana/desvio, eficiência US), `burndown/1` (de `sprint_snapshots`), `capture_snapshots/1` (chamado pelo Sync, 1 snapshot/dia por sprint ativo). Estados de "concluído" e tipo US vêm de `Rules.kpis`. Tela `/kpis` |
 | Azure | `SquadOps.Azure` | Fachada — despacha cada chamada entre `Real` (HTTP) e `Mock` conforme `AZURE_MODE` |
 | Azure.Client | `SquadOps.Azure.Client` | Cliente HTTP (Req) com Basic Auth (`":" <> PAT`), API version `7.1`, tratamento de status 401/404/429 |
 | Azure.Projects | `SquadOps.Azure.Projects` | `GET /_apis/projects` |
@@ -172,7 +173,8 @@ Observação: **não existe `Azure.Batch`** (a versão antiga do CLAUDE.md menci
 | `user_auth.ex` | Plug `fetch_current_user`/`require_authenticated_user`, helpers `log_in_user`/`log_out_user`, hook LiveView `on_mount :require_authenticated_user` |
 | `components/layouts.ex` | Layout `app` com Drawer DaisyUI (sidebar + topbar mobile), `nav_item`, `theme_toggle`, `flash_group` |
 | `controllers/user_session_controller.ex` | `POST /users/session` (login) e `DELETE /users/session` (logout) |
-| `live/*_live.ex` | 8 LiveViews (ver tabela de rotas) |
+| `live/*_live.ex` | 9 LiveViews (ver tabela de rotas) |
+| `components/core_components.ex` | `<.chart>` — canvas com hook `Chart` (Chart.js). Chart.js (UMD) está vendorizado em `assets/vendor/chart.umd.min.js` e empacotado pelo esbuild (offline-safe no portátil) |
 
 ### Rotas
 
@@ -186,6 +188,7 @@ Observação: **não existe `Azure.Batch`** (a versão antiga do CLAUDE.md menci
 | autenticada | live | `/squads/:id/settings` | `SquadSettingsLive` — PAT, URL, project, test/sync |
 | autenticada | live | `/squads/:id/rules` | `SquadRulesLive` — abas de workflow/validations/mapping/sync |
 | autenticada | live | `/backlog` | `BacklogLive` — **árvore Feature→US→Task** (componente recursivo), ordenar por data de criação, filtros squad/área/iteration/tipo/status |
+| autenticada | live | `/kpis` | `KpisLive` — burndown (linha), eficiência e volume por sprint (barras Chart.js) + tabela de métricas; filtros squad/sprint |
 | autenticada | live | `/bulk-create` | `BulkCreateLive` — criação local de N work items via textarea |
 | autenticada | live | `/logs` | `SyncLogsLive` — tabela de logs de sync com filtros squad/nível, limpar/atualizar |
 | dev | live | `/dev/dashboard` | `Phoenix.LiveDashboard` (compile_env `:dev_routes`) |
@@ -261,6 +264,7 @@ Relações: `has_many :sprints`, `has_many :work_items`, `has_one :auth_token`.
 | `validations` | map (JSONB) | flags `story_requires_points`, `bug_requires_assignee`, `max_sprint_points`, `block_invalid_transitions` |
 | `field_mapping` | map (JSONB) | mapeia tipos/status do Azure para enums locais |
 | `sync_policy` | map (JSONB) | `mode`, `auto` (liga/desliga auto-sync, default `true`), `frequency_minutes` (default 5), `scope`, `conflict_resolution` |
+| `kpis` | map (JSONB) | `completed_states` (status que contam como concluído, default `["resolved","closed"]`), `story_type` (default `"story"`), `working_days` |
 
 Defaults vivem em `SquadOps.Rules` e são *mesclados* com o que está salvo (`merge_defaults/1`).
 
@@ -275,6 +279,18 @@ Defaults vivem em `SquadOps.Rules` e são *mesclados* com o que está salvo (`me
 | `inserted_at` | timestamp | só inserted_at (`timestamps(updated_at: false)`), index |
 
 Migrations novas: `20260529000001` (story_points integer→float) e `20260529000002` (cria `sync_logs`). **Deploy que inclua essas mudanças exige rodar migrations** (no portátil: `bin\migrate.bat`).
+
+### `sprint_snapshots`
+| Campo | Tipo | Notas |
+|---|---|---|
+| `squad_id` | FK squads ON DELETE CASCADE | index |
+| `sprint_id` | FK sprints ON DELETE CASCADE | unique `(sprint_id, captured_on)` |
+| `captured_on` | date | 1 snapshot por dia por sprint (upsert idempotente) |
+| `total_points`/`remaining_points`/`completed_points` | float | para burndown |
+| `planned_us`/`completed_us` | integer | para eficiência |
+| `counts_by_state` | map (JSONB) | contagem por status |
+
+Gravado por `Kpis.capture_snapshots/1` ao fim de cada sync OK. Como acumula a partir de agora, o burndown só tem série após alguns syncs no sprint (sem retroativo).
 
 ---
 

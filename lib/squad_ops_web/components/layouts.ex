@@ -74,6 +74,12 @@ defmodule SquadOpsWeb.Layouts do
               active={@current_path == "/backlog"}
             />
             <.nav_item
+              href={~p"/kpis"}
+              icon="hero-chart-bar"
+              label="KPIs"
+              active={@current_path == "/kpis"}
+            />
+            <.nav_item
               href={~p"/bulk-create"}
               icon="hero-plus-circle"
               label="Criar em Massa"

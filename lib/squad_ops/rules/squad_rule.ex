@@ -9,6 +9,7 @@ defmodule SquadOps.Rules.SquadRule do
     field :validations, :map, default: %{}
     field :field_mapping, :map, default: %{}
     field :sync_policy, :map, default: %{}
+    field :kpis, :map, default: %{}
 
     belongs_to :squad, Squad
 
@@ -17,7 +18,7 @@ defmodule SquadOps.Rules.SquadRule do
 
   def changeset(rule, attrs) do
     rule
-    |> cast(attrs, [:squad_id, :workflow, :validations, :field_mapping, :sync_policy])
+    |> cast(attrs, [:squad_id, :workflow, :validations, :field_mapping, :sync_policy, :kpis])
     |> validate_required([:squad_id])
     |> unique_constraint(:squad_id)
     |> foreign_key_constraint(:squad_id)

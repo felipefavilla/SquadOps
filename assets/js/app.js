@@ -24,12 +24,33 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/squad_ops"
 import topbar from "../vendor/topbar"
+// Chart.js (UMD) vendorizado — empacotado pelo esbuild, funciona offline (portátil).
+import "../vendor/chart.umd.min.js"
+
+// Hook de gráfico: lê a config (Chart.js) de data-chart e (re)desenha no canvas.
+const ChartHook = {
+  mounted() { this.draw() },
+  updated() { this.draw() },
+  destroyed() { if (this.chart) this.chart.destroy() },
+  draw() {
+    const Chart = window.Chart
+    if (!Chart) return
+    const cfg = JSON.parse(this.el.dataset.chart || "{}")
+    if (this.chart) {
+      this.chart.data = cfg.data
+      this.chart.options = cfg.options || {}
+      this.chart.update()
+    } else {
+      this.chart = new Chart(this.el.getContext("2d"), cfg)
+    }
+  },
+}
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, Chart: ChartHook},
 })
 
 // Show progress bar on live navigation and form submits

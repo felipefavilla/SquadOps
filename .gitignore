@@ -22,6 +22,15 @@ erl_crash.dump
 # Docker
 .dockerignore
 
+# Portable distribution artifacts (built/copied locally — NOT source)
+/portable.zip
+/portable_old/
+/portable/portable/
+/portable/app/
+/portable/pgsql/
+/portable/pgdata/
+/portable/pg.log
+
 # OS
 .DS_Store
 Thumbs.db

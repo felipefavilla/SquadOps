@@ -452,6 +452,35 @@ defmodule SquadOpsWeb.CoreComponents do
     """
   end
 
+  @doc """
+  Renderiza um gráfico Chart.js via hook `Chart` (ver `assets/js/app.js`).
+
+  `type` é o tipo do Chart.js ("line", "bar", ...), `data`/`options` são os
+  mapas de configuração. A config é serializada em JSON no atributo `data-chart`;
+  ao mudar, o hook redesenha. Cada gráfico precisa de um `id` único.
+
+  ## Exemplo
+
+      <.chart id="burndown" type="line" data={%{labels: [...], datasets: [...]}} />
+  """
+  attr :id, :string, required: true
+  attr :type, :string, default: "bar"
+  attr :data, :map, required: true
+  attr :options, :map, default: %{}
+  attr :class, :any, default: "w-full"
+  attr :height, :integer, default: 280
+
+  def chart(assigns) do
+    config = %{type: assigns.type, data: assigns.data, options: assigns.options}
+    assigns = assign(assigns, :config_json, Jason.encode!(config))
+
+    ~H"""
+    <div class={@class} style={"position: relative; height: #{@height}px"}>
+      <canvas id={@id} phx-hook="Chart" data-chart={@config_json}></canvas>
+    </div>
+    """
+  end
+
   ## JS Commands
 
   def show(js \\ %JS{}, selector) do

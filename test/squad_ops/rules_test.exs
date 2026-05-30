@@ -66,11 +66,12 @@ defmodule SquadOps.RulesTest do
     end
   end
 
-  test "defaults/0 has the four expected sections" do
+  test "defaults/0 has the expected sections" do
     defs = Rules.defaults()
 
     assert Map.keys(defs) |> Enum.sort() == [
              :field_mapping,
+             :kpis,
              :sync_policy,
              :validations,
              :workflow
