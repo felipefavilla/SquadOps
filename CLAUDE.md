@@ -366,6 +366,7 @@ Briefings completos estão nos respectivos `.md`.
 
 ## Git Conventions
 
+- **Repositório:** <https://github.com/felipefavilla/SquadOps> (remote `origin`, HTTPS). Branch publicada: **`master`**. Auth via Git Credential Manager (já em cache nesta máquina) — push direto com `git push`.
 - Branches: `feat/`, `fix/`, `chore/`
 - Commits: English, imperative mood (`Add sprint board LiveView`)
 - PRs must pass `mix test` and `mix credo --strict`
