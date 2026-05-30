@@ -186,7 +186,7 @@ Observação: a criação em massa (`AutomationsLive`) cria os itens **no Azure*
 | autenticada | live | `/` | `DashboardLive` — cards de squads com stats |
 | autenticada | live | `/squads/:id` | `SquadLive` — **dashboard de gestão** do squad (filtros área/iteration, contagens por fila, breakdown por área e por iteration). Sem Kanban arrastável — o board vive no Azure |
 | autenticada | live | `/squads/:id/settings` | `SquadSettingsLive` — PAT, URL, project, test/sync |
-| autenticada | live | `/squads/:id/rules` | `SquadRulesLive` — abas de workflow/validations/mapping/sync |
+| autenticada | live | `/squads/:id/rules` | `SquadRulesLive` — abas workflow/validations/mapping/sync/**kpis** (auto-sync, completed_states, story_type, working_days) |
 | autenticada | live | `/backlog` | `BacklogLive` — **árvore Feature→US→Task** (componente recursivo), ordenar por data de criação, filtros squad/área/iteration/tipo/status |
 | autenticada | live | `/kpis` | `KpisLive` — burndown (linha), eficiência e volume por sprint (barras Chart.js) + tabela de métricas; filtros squad/sprint |
 | autenticada | live | `/automations` (+ alias `/bulk-create`) | `AutomationsLive` — cria N US/Features **no Azure DevOps** numa Área+Iteration (com Feature-pai opcional p/ quebrar US); loga em `sync_logs` e dispara sync |

@@ -95,7 +95,8 @@ defmodule SquadOpsWeb.SquadRulesLive do
   def handle_event("save_sync", %{"s" => params}, socket) do
     sync_policy = %{
       "mode" => params["mode"] || "manual",
-      "frequency_minutes" => parse_int(params["frequency_minutes"], 60),
+      "auto" => params["auto"] == "true",
+      "frequency_minutes" => parse_int(params["frequency_minutes"], 5),
       "scope" => params["scope"] || "active_and_future",
       "conflict_resolution" => params["conflict_resolution"] || "azure_wins"
     }
@@ -106,6 +107,23 @@ defmodule SquadOpsWeb.SquadRulesLive do
      socket
      |> assign(rule: Rules.get_or_init(rule.squad_id))
      |> put_flash(:info, "Política salva.")}
+  end
+
+  # --- KPIs ---
+
+  def handle_event("save_kpis", %{"k" => params}, socket) do
+    kpis = %{
+      "completed_states" => params["completed_states"] || [],
+      "story_type" => params["story_type"] || "story",
+      "working_days" => params["working_days"] || []
+    }
+
+    {:ok, rule} = Rules.update_section(socket.assigns.rule, :kpis, kpis)
+
+    {:noreply,
+     socket
+     |> assign(rule: Rules.get_or_init(rule.squad_id))
+     |> put_flash(:info, "KPIs salvos.")}
   end
 
   def handle_event("reset", %{"section" => section}, socket) do
@@ -174,6 +192,13 @@ defmodule SquadOpsWeb.SquadRulesLive do
           icon="hero-cloud-arrow-down"
           label="Sincronização"
         />
+        <.tab
+          id="kpis"
+          current={@tab}
+          squad_id={@squad.id}
+          icon="hero-chart-bar"
+          label="KPIs"
+        />
       </div>
 
       <%!-- Conteúdo da aba --%>
@@ -188,6 +213,8 @@ defmodule SquadOpsWeb.SquadRulesLive do
               <.mapping_tab rule={@rule} />
             <% "sync" -> %>
               <.sync_tab rule={@rule} />
+            <% "kpis" -> %>
+              <.kpis_tab rule={@rule} statuses={@statuses} />
           <% end %>
         </div>
       </div>
@@ -482,6 +509,23 @@ defmodule SquadOpsWeb.SquadRulesLive do
         </button>
       </div>
 
+      <label class="cursor-pointer flex items-start gap-3 p-3 rounded-lg hover:bg-base-200">
+        <input type="hidden" name="s[auto]" value="false" />
+        <input
+          type="checkbox"
+          name="s[auto]"
+          value="true"
+          checked={@rule.sync_policy["auto"] != false}
+          class="checkbox checkbox-primary mt-0.5"
+        />
+        <div>
+          <div class="font-medium">Auto-sync em background</div>
+          <div class="text-xs text-base-content/60">
+            O Scheduler sincroniza este squad automaticamente a cada N minutos (abaixo).
+          </div>
+        </div>
+      </label>
+
       <div class="form-control gap-1">
         <label class="label py-1"><span class="label-text font-medium">Modo</span></label>
         <select name="s[mode]" class="select select-bordered select-sm w-full max-w-xs">
@@ -542,6 +586,106 @@ defmodule SquadOpsWeb.SquadRulesLive do
             Manual (gera lista de conflitos)
           </option>
         </select>
+      </div>
+
+      <div class="card-actions justify-end">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <.icon name="hero-check" class="size-4" /> Salvar
+        </button>
+      </div>
+    </form>
+    """
+  end
+
+  # --- Aba: KPIs ---
+
+  @days [
+    {"mon", "Seg"},
+    {"tue", "Ter"},
+    {"wed", "Qua"},
+    {"thu", "Qui"},
+    {"fri", "Sex"},
+    {"sat", "Sáb"},
+    {"sun", "Dom"}
+  ]
+
+  defp kpis_tab(assigns) do
+    kpis = assigns.rule.kpis || %{}
+    completed = kpis["completed_states"] || ["resolved", "closed"]
+    working = kpis["working_days"] || ["mon", "tue", "wed", "thu", "fri"]
+    assigns = assign(assigns, completed: completed, working: working, days: @days)
+
+    ~H"""
+    <form phx-submit="save_kpis" class="space-y-5">
+      <div class="flex items-start justify-between">
+        <div>
+          <h2 class="text-lg font-semibold">Indicadores</h2>
+          <p class="text-sm text-base-content/60">
+            Como os KPIs (eficiência, burndown) são calculados para este squad.
+          </p>
+        </div>
+        <button type="button" phx-click="reset" phx-value-section="kpis" class="btn btn-ghost btn-xs">
+          <.icon name="hero-arrow-uturn-left" class="size-3" /> Restaurar
+        </button>
+      </div>
+
+      <div>
+        <h3 class="font-semibold mb-1">Status que contam como "concluído"</h3>
+        <p class="text-xs text-base-content/60 mb-2">
+          Usado no burndown (pontos restantes) e na eficiência (US concluídas).
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <label
+            :for={s <- @statuses}
+            class="cursor-pointer flex items-center gap-2 px-3 py-2 rounded-lg border border-base-200 hover:bg-base-200"
+          >
+            <input
+              type="checkbox"
+              name="k[completed_states][]"
+              value={s}
+              checked={s in @completed}
+              class="checkbox checkbox-sm checkbox-primary"
+            />
+            <span class="text-sm font-mono">{s}</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-control gap-1">
+        <label class="label py-1">
+          <span class="label-text font-medium">Tipo tratado como User Story</span>
+        </label>
+        <select name="k[story_type]" class="select select-bordered select-sm w-full max-w-xs">
+          <option
+            :for={t <- ~w(story feature task bug)}
+            value={t}
+            selected={(@rule.kpis["story_type"] || "story") == t}
+          >
+            {t}
+          </option>
+        </select>
+        <div class="text-xs text-base-content/60">
+          Base do indicador de eficiência (US plan/concl).
+        </div>
+      </div>
+
+      <div>
+        <h3 class="font-semibold mb-2">Dias úteis (linha ideal do burndown)</h3>
+        <div class="flex flex-wrap gap-2">
+          <label
+            :for={{code, label} <- @days}
+            class="cursor-pointer flex items-center gap-2 px-3 py-2 rounded-lg border border-base-200 hover:bg-base-200"
+          >
+            <input
+              type="checkbox"
+              name="k[working_days][]"
+              value={code}
+              checked={code in @working}
+              class="checkbox checkbox-sm checkbox-primary"
+            />
+            <span class="text-sm">{label}</span>
+          </label>
+        </div>
       </div>
 
       <div class="card-actions justify-end">
