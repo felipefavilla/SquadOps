@@ -23,6 +23,18 @@ defmodule SquadOps.Azure.Client do
   def get(req, path, opts \\ []), do: Req.get(req, [url: path] ++ opts)
   def post(req, path, body, opts \\ []), do: Req.post(req, [url: path, json: body] ++ opts)
 
+  @doc """
+  POST com corpo `application/json-patch+json` (criação/edição de work items).
+  `ops` é a lista de operações JSON Patch (mapas com op/path/value).
+  """
+  def post_json_patch(req, path, ops) do
+    Req.post(req,
+      url: path,
+      body: Jason.encode!(ops),
+      headers: [{"content-type", "application/json-patch+json"}]
+    )
+  end
+
   def handle({:ok, %Req.Response{status: status, body: body}}) when status in 200..299,
     do: {:ok, body}
 

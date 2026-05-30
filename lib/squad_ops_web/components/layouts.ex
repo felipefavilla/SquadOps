@@ -80,10 +80,10 @@ defmodule SquadOpsWeb.Layouts do
               active={@current_path == "/kpis"}
             />
             <.nav_item
-              href={~p"/bulk-create"}
-              icon="hero-plus-circle"
-              label="Criar em Massa"
-              active={@current_path == "/bulk-create"}
+              href={~p"/automations"}
+              icon="hero-bolt"
+              label="Automações"
+              active={@current_path in ["/automations", "/bulk-create"]}
             />
             <.nav_item
               href={~p"/connect"}

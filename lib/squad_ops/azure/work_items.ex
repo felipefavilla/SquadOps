@@ -6,6 +6,63 @@ defmodule SquadOps.Azure.WorkItems do
              System.IterationPath System.AreaPath System.Parent System.Description
              System.CreatedDate System.ChangedDate Microsoft.VSTS.Common.ClosedDate)
 
+  @azure_type %{
+    "feature" => "Feature",
+    "story" => "User Story",
+    "task" => "Task",
+    "bug" => "Bug"
+  }
+
+  @doc """
+  Cria um work item no Azure DevOps via JSON Patch.
+
+  `fields` aceita: `:title` (obrigatório), `:area_path`, `:iteration_path`,
+  `:description`, `:assigned_to`, `:story_points` e `:parent_azure_id` (cria o
+  link hierárquico com a Feature/US pai). Retorna `{:ok, %{azure_id: id}}`.
+  """
+  def create(%{azure_org_url: org_url} = token, project, type, fields) do
+    azure_type = Map.get(@azure_type, type, "Task")
+    path = "/#{URI.encode(project)}/_apis/wit/workitems/$#{URI.encode(azure_type)}"
+    ops = build_ops(org_url, fields)
+
+    token
+    |> Client.new()
+    |> Client.post_json_patch(path, ops)
+    |> Client.handle()
+    |> case do
+      {:ok, %{"id" => id}} -> {:ok, %{azure_id: id}}
+      other -> other
+    end
+  end
+
+  defp build_ops(org_url, fields) do
+    [
+      add("/fields/System.Title", fields[:title]),
+      add("/fields/System.AreaPath", fields[:area_path]),
+      add("/fields/System.IterationPath", fields[:iteration_path]),
+      add("/fields/System.Description", fields[:description]),
+      add("/fields/System.AssignedTo", fields[:assigned_to]),
+      add("/fields/Microsoft.VSTS.Scheduling.StoryPoints", fields[:story_points]),
+      parent_op(org_url, fields[:parent_azure_id])
+    ]
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp add(_path, nil), do: nil
+  defp add(path, value), do: %{op: "add", path: path, value: value}
+
+  defp parent_op(_org_url, nil), do: nil
+
+  defp parent_op(org_url, parent_id) do
+    url = String.trim_trailing(org_url, "/") <> "/_apis/wit/workItems/#{parent_id}"
+
+    %{
+      op: "add",
+      path: "/relations/-",
+      value: %{rel: "System.LinkTypes.Hierarchy-Reverse", url: url}
+    }
+  end
+
   @doc "Run a WIQL query and return matching IDs"
   def query_ids(token, project, wiql) do
     path = "/#{URI.encode(project)}/_apis/wit/wiql"

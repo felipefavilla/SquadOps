@@ -51,6 +51,17 @@ defmodule SquadOps.Azure do
   end
 
   @doc """
+  Cria um work item no Azure (ou mock). `type` é o tipo local
+  (`"feature"|"story"|"task"|"bug"`); `fields` segue `WorkItems.create/4`.
+  """
+  def create_work_item(token, project, type, fields) do
+    case mode() do
+      :real -> WorkItems.create(token, project, type, fields)
+      :mock -> Mock.create_work_item(token, project, type, fields)
+    end
+  end
+
+  @doc """
   Tests connectivity. Returns `{:ok, :real}`, `{:ok, :mock_mode}` or `{:error, reason}`.
   """
   def test_connection(token) do

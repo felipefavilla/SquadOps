@@ -63,5 +63,12 @@ defmodule SquadOps.AzureTest do
     test "test_connection/1 returns mock_mode" do
       assert {:ok, :mock_mode} = Azure.test_connection(nil)
     end
+
+    test "create_work_item/4 returns a fake azure id" do
+      assert {:ok, %{azure_id: id}} =
+               Azure.create_work_item(nil, "MockProject", "story", %{title: "X"})
+
+      assert is_integer(id)
+    end
   end
 end

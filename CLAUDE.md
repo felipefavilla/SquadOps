@@ -157,13 +157,13 @@ LiveViews só conversam com **contextos**. Os contextos é que decidem entre Rep
 | Azure.Client | `SquadOps.Azure.Client` | Cliente HTTP (Req) com Basic Auth (`":" <> PAT`), API version `7.1`, tratamento de status 401/404/429 |
 | Azure.Projects | `SquadOps.Azure.Projects` | `GET /_apis/projects` |
 | Azure.Sprints | `SquadOps.Azure.Sprints` | Iterations do team — converte `timeFrame` em `active`/`past`/`future` |
-| Azure.WorkItems | `SquadOps.Azure.WorkItems` | WIQL query + fetch em chunks de 200; normaliza campos `System.*` e `Microsoft.VSTS.*` |
+| Azure.WorkItems | `SquadOps.Azure.WorkItems` | WIQL query + fetch em chunks de 200; normaliza campos `System.*`/`Microsoft.VSTS.*` (incl. Area, Parent, datas). `create/4` cria work item via JSON Patch (Title/Area/Iteration/Description + link de pai `Hierarchy-Reverse`) |
 | Azure.Boards | `SquadOps.Azure.Boards` | Colunas do board (default `"Stories"`) — usadas como workflow visual do Kanban |
 | Azure.Mock | `SquadOps.Azure.Mock` | Dados falsos no mesmo shape dos módulos reais, para dev sem PAT |
 | Azure.Sync | `SquadOps.Azure.Sync` | Orquestra a sincronização: token → sprints → WIQL → work items → board columns → `Auth.mark_validated/1`. **Resiliente**: grava cada item individualmente (`Repo.insert/update`, sem bang); linha inválida é logada em `SyncLogs` e pulada — não aborta o run. Retorna `work_item_errors` no resumo |
 | Sync.Scheduler | `SquadOps.Sync.Scheduler` | GenServer no supervision tree. A cada 5 min sincroniza squads com token e `sync_policy.auto != false`; faz broadcast em `"sync:status"` (PubSub) p/ a home atualizar ao vivo. Desligado em test (`config :squad_ops, auto_sync: false`); intervalo via `:auto_sync_interval_ms` |
 
-Observação: **não existe `Azure.Batch`** (a versão antiga do CLAUDE.md mencionava). A criação em massa hoje é local (LiveView → `Squads.create_work_item/1`).
+Observação: a criação em massa (`AutomationsLive`) cria os itens **no Azure** via `Azure.create_work_item/4` (facade → `WorkItems.create` real ou `Mock.create_work_item`), e depois roda um sync para trazê-los ao banco local. `Client.post_json_patch/3` faz o POST `application/json-patch+json`.
 
 ### Web (`lib/squad_ops_web/`)
 
@@ -189,7 +189,7 @@ Observação: **não existe `Azure.Batch`** (a versão antiga do CLAUDE.md menci
 | autenticada | live | `/squads/:id/rules` | `SquadRulesLive` — abas de workflow/validations/mapping/sync |
 | autenticada | live | `/backlog` | `BacklogLive` — **árvore Feature→US→Task** (componente recursivo), ordenar por data de criação, filtros squad/área/iteration/tipo/status |
 | autenticada | live | `/kpis` | `KpisLive` — burndown (linha), eficiência e volume por sprint (barras Chart.js) + tabela de métricas; filtros squad/sprint |
-| autenticada | live | `/bulk-create` | `BulkCreateLive` — criação local de N work items via textarea |
+| autenticada | live | `/automations` (+ alias `/bulk-create`) | `AutomationsLive` — cria N US/Features **no Azure DevOps** numa Área+Iteration (com Feature-pai opcional p/ quebrar US); loga em `sync_logs` e dispara sync |
 | autenticada | live | `/logs` | `SyncLogsLive` — tabela de logs de sync com filtros squad/nível, limpar/atualizar |
 | dev | live | `/dev/dashboard` | `Phoenix.LiveDashboard` (compile_env `:dev_routes`) |
 | dev | forward | `/dev/mailbox` | `Plug.Swoosh.MailboxPreview` |

@@ -39,7 +39,8 @@ defmodule SquadOpsWeb.Router do
     live "/squads/:id/rules", SquadRulesLive, :index
     live "/backlog", BacklogLive, :index
     live "/kpis", KpisLive, :index
-    live "/bulk-create", BulkCreateLive, :index
+    live "/automations", AutomationsLive, :index
+    live "/bulk-create", AutomationsLive, :index
     live "/logs", SyncLogsLive, :index
   end
 

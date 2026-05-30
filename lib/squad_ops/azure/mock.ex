@@ -246,6 +246,10 @@ defmodule SquadOps.Azure.Mock do
     }
   end
 
+  def create_work_item(_token, _project, _type, _fields) do
+    {:ok, %{azure_id: System.unique_integer([:positive]) + 90_000}}
+  end
+
   def test_connection(_token), do: {:ok, :mock_mode}
 
   def get_board_columns(_token, _project, _team \\ nil, _board \\ "Stories") do
