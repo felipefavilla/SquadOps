@@ -26,16 +26,16 @@ defmodule SquadOps.Azure.SyncTest do
       squad = squad_fixture(%{azure_project: "MockProject"})
       _ = token_fixture(squad)
 
-      assert {:ok, %{sprints: 3, work_items: 3, columns: 4, mode: :mock}} =
+      assert {:ok, %{sprints: 5, work_items: 9, columns: 4, mode: :mock, work_item_errors: 0}} =
                Sync.sync_squad(squad)
 
-      # Sprints were inserted in DB
+      # Sprints (iterations) were inserted in DB
       sprints = SquadOps.Repo.all(from s in Sprint, where: s.squad_id == ^squad.id)
-      assert length(sprints) == 3
+      assert length(sprints) == 5
 
       # Work items inserted in DB
       items = SquadOps.Repo.all(from w in WorkItem, where: w.squad_id == ^squad.id)
-      assert length(items) == 3
+      assert length(items) == 9
 
       # workflow["columns"] was populated by Rules.update_section
       rule = Rules.get_or_init(squad.id)
@@ -67,7 +67,36 @@ defmodule SquadOps.Azure.SyncTest do
       assert {:ok, _} = Sync.sync_squad(squad)
       assert {:ok, _} = Sync.sync_squad(squad)
 
-      assert length(Squads.list_sprints(squad.id)) == 3
+      assert length(Squads.list_sprints(squad.id)) == 5
+    end
+
+    test "persists area, parent and iteration classification from Azure" do
+      squad = squad_fixture(%{azure_project: "MockProject"})
+      _ = token_fixture(squad)
+
+      assert {:ok, _} = Sync.sync_squad(squad)
+
+      # Áreas capturadas
+      areas =
+        SquadOps.Repo.all(
+          from w in WorkItem, where: w.squad_id == ^squad.id, distinct: true, select: w.area_path
+        )
+
+      assert Enum.any?(areas, &(&1 =~ "Pagamentos"))
+
+      # Relacionamento pai/filho persistido
+      child = SquadOps.Repo.one(from w in WorkItem, where: w.azure_id == 9002)
+      assert child.parent_azure_id == 9001
+      assert child.story_points == 5.0
+      assert %DateTime{} = child.azure_created_at
+
+      # Iteration sem datas classificada como backlog
+      backlog =
+        SquadOps.Repo.one(
+          from s in Sprint, where: s.squad_id == ^squad.id and s.name == "Backlog"
+        )
+
+      assert backlog.kind == "backlog"
     end
   end
 end

@@ -202,7 +202,13 @@ defmodule SquadOps.Azure.Sync do
       status: status,
       assigned_to: item.assigned_to,
       story_points: item.story_points,
-      priority: item.priority
+      priority: item.priority,
+      area_path: Map.get(item, :area_path),
+      parent_azure_id: Map.get(item, :parent_azure_id),
+      iteration_path: Map.get(item, :iteration_path),
+      azure_created_at: Map.get(item, :azure_created_at),
+      azure_changed_at: Map.get(item, :azure_changed_at),
+      closed_at: Map.get(item, :closed_at)
     }
 
     existing = Repo.one(from w in WorkItem, where: w.azure_id == ^item.azure_id)

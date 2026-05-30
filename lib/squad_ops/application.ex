@@ -12,8 +12,8 @@ defmodule SquadOps.Application do
       SquadOps.Repo,
       {DNSCluster, query: Application.get_env(:squad_ops, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SquadOps.PubSub},
-      # Start a worker by calling: SquadOps.Worker.start_link(arg)
-      # {SquadOps.Worker, arg},
+      # Auto-sync periódico com o Azure (desligado em test via config)
+      SquadOps.Sync.Scheduler,
       # Start to serve requests, typically the last entry
       SquadOpsWeb.Endpoint
     ]

@@ -3,7 +3,8 @@ defmodule SquadOps.Azure.WorkItems do
 
   @fields ~w(System.Id System.Title System.WorkItemType System.State System.AssignedTo
              Microsoft.VSTS.Scheduling.StoryPoints Microsoft.VSTS.Common.Priority
-             System.IterationPath System.Description)
+             System.IterationPath System.AreaPath System.Parent System.Description
+             System.CreatedDate System.ChangedDate Microsoft.VSTS.Common.ClosedDate)
 
   @doc "Run a WIQL query and return matching IDs"
   def query_ids(token, project, wiql) do
@@ -58,6 +59,11 @@ defmodule SquadOps.Azure.WorkItems do
       story_points: parse_points(f["Microsoft.VSTS.Scheduling.StoryPoints"]),
       priority: f["Microsoft.VSTS.Common.Priority"] || 2,
       iteration_path: f["System.IterationPath"],
+      area_path: f["System.AreaPath"],
+      parent_azure_id: f["System.Parent"],
+      azure_created_at: parse_datetime(f["System.CreatedDate"]),
+      azure_changed_at: parse_datetime(f["System.ChangedDate"]),
+      closed_at: parse_datetime(f["Microsoft.VSTS.Common.ClosedDate"]),
       description: strip_html(f["System.Description"])
     }
   end
@@ -92,6 +98,18 @@ defmodule SquadOps.Azure.WorkItems do
   defp extract_user(nil), do: nil
   defp extract_user(%{"displayName" => name}), do: name
   defp extract_user(_), do: nil
+
+  # Azure manda ISO8601 (ex.: "2026-05-20T12:34:56.78Z"); schema é :utc_datetime (segundos).
+  defp parse_datetime(nil), do: nil
+
+  defp parse_datetime(str) when is_binary(str) do
+    case DateTime.from_iso8601(str) do
+      {:ok, dt, _offset} -> DateTime.truncate(dt, :second)
+      _ -> nil
+    end
+  end
+
+  defp parse_datetime(_), do: nil
 
   defp strip_html(nil), do: nil
   defp strip_html(html), do: html |> String.replace(~r/<[^>]+>/, "") |> String.trim()

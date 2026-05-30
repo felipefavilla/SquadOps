@@ -17,13 +17,17 @@ defmodule SquadOps.Azure.Sprints do
 
   defp normalize(it) do
     attrs = it["attributes"] || %{}
+    start_date = parse_date(attrs["startDate"])
+    end_date = parse_date(attrs["finishDate"])
 
     %{
       azure_id: it["id"],
       name: it["name"],
-      start_date: parse_date(attrs["startDate"]),
-      end_date: parse_date(attrs["finishDate"]),
-      status: map_status(attrs["timeFrame"])
+      path: it["path"],
+      start_date: start_date,
+      end_date: end_date,
+      status: map_status(attrs["timeFrame"]),
+      kind: if(start_date && end_date, do: "sprint", else: "backlog")
     }
   end
 

@@ -51,7 +51,8 @@ defmodule SquadOps.Rules do
 
   @default_sync_policy %{
     "mode" => "manual",
-    "frequency_minutes" => 60,
+    "auto" => true,
+    "frequency_minutes" => 5,
     "scope" => "active_and_future",
     "conflict_resolution" => "azure_wins"
   }

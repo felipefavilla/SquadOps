@@ -16,6 +16,12 @@ defmodule SquadOps.Squads.WorkItem do
     field :story_points, :float
     field :priority, :integer, default: 2
     field :azure_id, :integer
+    field :area_path, :string
+    field :parent_azure_id, :integer
+    field :iteration_path, :string
+    field :azure_created_at, :utc_datetime
+    field :azure_changed_at, :utc_datetime
+    field :closed_at, :utc_datetime
 
     belongs_to :squad, Squad
     belongs_to :sprint, Sprint
@@ -34,6 +40,12 @@ defmodule SquadOps.Squads.WorkItem do
       :story_points,
       :priority,
       :azure_id,
+      :area_path,
+      :parent_azure_id,
+      :iteration_path,
+      :azure_created_at,
+      :azure_changed_at,
+      :closed_at,
       :squad_id,
       :sprint_id
     ])

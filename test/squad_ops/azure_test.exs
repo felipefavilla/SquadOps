@@ -33,22 +33,26 @@ defmodule SquadOps.AzureTest do
       assert Enum.any?(projects, &(&1.name == "Pagamentos"))
     end
 
-    test "list_sprints/3 returns 3 mocked sprints" do
+    test "list_sprints/3 returns mocked iterations including a backlog one" do
       assert {:ok, sprints} = Azure.list_sprints(nil, "any_project")
-      assert length(sprints) == 3
       assert Enum.any?(sprints, &(&1.status == "active"))
+      assert Enum.any?(sprints, &(&1.kind == "sprint"))
+      assert Enum.any?(sprints, &(&1.kind == "backlog"))
     end
 
     test "query_work_items/3 returns fake IDs" do
       assert {:ok, ids} = Azure.query_work_items(nil, "any_project", "WIQL")
-      assert ids == [9001, 9002, 9003]
+      assert 9001 in ids
+      assert length(ids) > 3
     end
 
-    test "fetch_work_items/2 returns one item per id" do
-      ids = [1, 2, 3]
+    test "fetch_work_items/2 returns the known mock items with management fields" do
+      {:ok, ids} = Azure.query_work_items(nil, "any_project", "WIQL")
       assert {:ok, items} = Azure.fetch_work_items(nil, ids)
-      assert length(items) == 3
-      assert Enum.all?(items, &Map.has_key?(&1, :azure_id))
+      assert length(items) == length(ids)
+      assert Enum.all?(items, &Map.has_key?(&1, :area_path))
+      # há relacionamento pai/filho no mock
+      assert Enum.any?(items, &(&1.parent_azure_id != nil))
     end
 
     test "get_board_columns/4 returns mocked columns" do

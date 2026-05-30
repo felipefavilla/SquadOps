@@ -1,5 +1,8 @@
 import Config
 
+# Não rodar auto-sync em background durante os testes
+config :squad_ops, auto_sync: false
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used
