@@ -9,9 +9,6 @@ RUN mix local.hex --force && mix local.rebar --force
 COPY mix.exs mix.lock* ./
 RUN mix deps.get
 
-COPY assets/package.json assets/package-lock.json* ./assets/
-RUN if [ -f assets/package.json ]; then npm ci --prefix assets; fi
-
 COPY . .
 
 EXPOSE 4000

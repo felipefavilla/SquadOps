@@ -1,0 +1,5 @@
+app/
+pgsql/
+pgdata/
+pg.log
+.env

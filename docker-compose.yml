@@ -13,11 +13,12 @@ services:
       - PHX_HOST=${PHX_HOST:-localhost}
       - PORT=4000
       - MIX_ENV=dev
+      - DB_HOST=db
+      - AZURE_MODE=${AZURE_MODE:-mock}
     volumes:
       - .:/app
       - mix_deps:/app/deps
       - mix_build:/app/_build
-      - node_modules:/app/assets/node_modules
     depends_on:
       db:
         condition: service_healthy
@@ -43,4 +44,3 @@ volumes:
   postgres_data:
   mix_deps:
   mix_build:
-  node_modules:

@@ -11,7 +11,7 @@ docker run --rm -v "${PWD}:/app" -w /app elixir:1.18-otp-27-alpine sh -c "
   mix local.hex --force &&
   mix local.rebar --force &&
   mix archive.install hex phx_new --force &&
-  mix phx.new . --app squad_ops --module SquadOps --live --no-install
+  echo y | mix phx.new . --app squad_ops --module SquadOps --live --no-install
 "
 
 Write-Host ""
