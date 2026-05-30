@@ -132,4 +132,48 @@ defmodule SquadOps.SquadsTest do
       assert s.stats["active"] == 1
     end
   end
+
+  describe "relationship_tree/1" do
+    test "nests US and Tasks under their Feature via parent_azure_id" do
+      squad = squad_fixture()
+      feature = work_item_fixture(squad, %{type: "feature", azure_id: 1, title: "Feat"})
+      story = work_item_fixture(squad, %{type: "story", azure_id: 2, parent_azure_id: 1})
+      _task = work_item_fixture(squad, %{type: "task", azure_id: 3, parent_azure_id: 2})
+
+      tree = Squads.relationship_tree(squad_id: squad.id)
+
+      assert [%{item: root, children: [story_node]}] = tree
+      assert root.id == feature.id
+      assert story_node.item.id == story.id
+      assert [%{item: task_item}] = story_node.children
+      assert task_item.azure_id == 3
+    end
+
+    test "does not recurse on local items with nil azure_id (regression)" do
+      squad = squad_fixture()
+      _a = work_item_fixture(squad, %{title: "Local A"})
+      _b = work_item_fixture(squad, %{title: "Local B"})
+
+      tree = Squads.relationship_tree(squad_id: squad.id)
+
+      # Ambos são raízes planas, sem filhos (não viram filhos um do outro)
+      assert length(tree) == 2
+      assert Enum.all?(tree, &(&1.children == []))
+    end
+  end
+
+  describe "board_columns/1 and queue_counts/2" do
+    test "queue_counts counts items per local status column" do
+      squad = squad_fixture()
+      _ = work_item_fixture(squad, %{status: "new"})
+      _ = work_item_fixture(squad, %{status: "active"})
+      _ = work_item_fixture(squad, %{status: "active"})
+
+      counts = Squads.queue_counts(squad.id)
+      by_name = Map.new(counts, &{&1.name, &1.count})
+
+      assert by_name["Novo"] == 1
+      assert by_name["Em Andamento"] == 2
+    end
+  end
 end

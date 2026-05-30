@@ -149,7 +149,7 @@ LiveViews só conversam com **contextos**. Os contextos é que decidem entre Rep
 |---|---|---|
 | Accounts | `SquadOps.Accounts` + `Accounts.User` | Usuários locais, autenticação bcrypt, roles (`admin`/`user`) |
 | Auth | `SquadOps.Auth` + `Auth.Token` | Armazenamento e upsert de PAT do Azure DevOps por squad, marca `validated_at` |
-| Squads | `SquadOps.Squads` + `Squads.{Squad,Sprint,WorkItem}` | Domínio principal — CRUD de squads, sprints, work items e agregações (`work_item_stats`, `list_all_work_items`) |
+| Squads | `SquadOps.Squads` + `Squads.{Squad,Sprint,WorkItem}` | Domínio principal — CRUD de squads, sprints, work items e agregações. Gestão: `list_areas/1`, `list_iterations/2` (kind), `relationship_tree/1` (árvore Feature→US→Task por `parent_azure_id`), `board_columns/1` + `queue_counts/2` (filas Kanban, filtro por área), filtros `area_path`/`sort` em `list_work_items`/`list_all_work_items` |
 | Rules | `SquadOps.Rules` + `Rules.SquadRule` | Regras de negócio por squad em 4 seções JSONB: `workflow`, `validations`, `field_mapping`, `sync_policy`. Faz merge com defaults |
 | SyncLogs | `SquadOps.SyncLogs` + `SyncLogs.SyncLog` | Log persistido das sincronizações (tabela `sync_logs`). Cada run tem `run_id`; helpers `info/warning/error/4`, `list_logs/1`, `clear_logs/1`. Lido pela tela `/logs` |
 | Azure | `SquadOps.Azure` | Fachada — despacha cada chamada entre `Real` (HTTP) e `Mock` conforme `AZURE_MODE` |
@@ -182,10 +182,10 @@ Observação: **não existe `Azure.Batch`** (a versão antiga do CLAUDE.md menci
 | pública | POST | `/users/session` | `UserSessionController.create/2` |
 | pública | DELETE | `/users/session` | `UserSessionController.delete/2` |
 | autenticada | live | `/` | `DashboardLive` — cards de squads com stats |
-| autenticada | live | `/squads/:id` | `SquadLive` — Kanban do sprint ativo |
+| autenticada | live | `/squads/:id` | `SquadLive` — **dashboard de gestão** do squad (filtros área/iteration, contagens por fila, breakdown por área e por iteration). Sem Kanban arrastável — o board vive no Azure |
 | autenticada | live | `/squads/:id/settings` | `SquadSettingsLive` — PAT, URL, project, test/sync |
 | autenticada | live | `/squads/:id/rules` | `SquadRulesLive` — abas de workflow/validations/mapping/sync |
-| autenticada | live | `/backlog` | `BacklogLive` — filtros por squad/sprint/type/status |
+| autenticada | live | `/backlog` | `BacklogLive` — **árvore Feature→US→Task** (componente recursivo), ordenar por data de criação, filtros squad/área/iteration/tipo/status |
 | autenticada | live | `/bulk-create` | `BulkCreateLive` — criação local de N work items via textarea |
 | autenticada | live | `/logs` | `SyncLogsLive` — tabela de logs de sync com filtros squad/nível, limpar/atualizar |
 | dev | live | `/dev/dashboard` | `Phoenix.LiveDashboard` (compile_env `:dev_routes`) |

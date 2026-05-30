@@ -4,8 +4,6 @@ defmodule SquadOpsWeb.SquadLiveTest do
   import Phoenix.LiveViewTest
   import SquadOps.Fixtures
 
-  alias SquadOps.Squads
-
   setup %{conn: conn} do
     user = user_fixture()
     squad = squad_fixture(%{name: "Kanban Squad"})
@@ -15,24 +13,31 @@ defmodule SquadOpsWeb.SquadLiveTest do
     %{conn: log_in_user(conn, user), squad: squad, sprint: sprint}
   end
 
-  test "renders the kanban with default columns", %{conn: conn, squad: squad} do
+  test "renders the management dashboard with queue, area and iteration sections",
+       %{conn: conn, squad: squad} do
     {:ok, _view, html} = live(conn, ~p"/squads/#{squad.id}")
     assert html =~ "Kanban Squad"
-    # default columns labels (since no rules.workflow.columns)
+    assert html =~ "Filas do Kanban"
+    assert html =~ "Itens por Área"
+    assert html =~ "Itens por Iteration"
+    # nome da iteration ativa aparece na tabela por iteration
+    assert html =~ "Sprint Atual"
+    # colunas padrão (sem rules.workflow.columns sincronizadas)
     assert html =~ "Novo"
-    assert html =~ "Em Andamento"
-    assert html =~ "Resolvido"
   end
 
-  test "handle_event 'move' updates the item status", %{conn: conn, squad: squad} do
+  test "filtering by iteration keeps the page rendering", %{
+    conn: conn,
+    squad: squad,
+    sprint: sprint
+  } do
     {:ok, view, _html} = live(conn, ~p"/squads/#{squad.id}")
 
-    item = Squads.list_work_items(squad.id) |> hd()
-    assert item.status == "new"
+    html =
+      view
+      |> form("form[phx-change=filter]", %{"area" => "", "iteration_id" => to_string(sprint.id)})
+      |> render_change()
 
-    render_click(view, "move", %{"item-id" => to_string(item.id), "status" => "active"})
-
-    reloaded = Squads.get_work_item!(item.id)
-    assert reloaded.status == "active"
+    assert html =~ "Filas do Kanban"
   end
 end

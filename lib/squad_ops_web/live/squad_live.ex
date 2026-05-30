@@ -3,199 +3,227 @@ defmodule SquadOpsWeb.SquadLive do
 
   on_mount {SquadOpsWeb.UserAuth, :require_authenticated_user}
 
-  alias SquadOps.{Rules, Squads}
-
-  # Fallback usado quando o squad ainda não sincronizou colunas do Azure board
-  @default_columns [
-    %{
-      name: "Novo",
-      local_statuses: ["new"],
-      badge_class: "badge-warning",
-      column_type: "incoming",
-      item_limit: nil
-    },
-    %{
-      name: "Em Andamento",
-      local_statuses: ["active"],
-      badge_class: "badge-info",
-      column_type: "inProgress",
-      item_limit: nil
-    },
-    %{
-      name: "Resolvido",
-      local_statuses: ["resolved"],
-      badge_class: "badge-success",
-      column_type: "outgoing",
-      item_limit: nil
-    },
-    %{
-      name: "Fechado",
-      local_statuses: ["closed"],
-      badge_class: "badge-ghost",
-      column_type: "outgoing",
-      item_limit: nil
-    }
-  ]
-
-  @type_colors %{
-    "feature" => "badge-primary",
-    "story" => "badge-secondary",
-    "task" => "badge-accent",
-    "bug" => "badge-error"
-  }
+  alias SquadOps.Squads
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    {squad, sprint, work_items} = Squads.get_squad_with_active_sprint!(id)
-    all_sprints = Squads.list_sprints(squad.id)
-    rule = Rules.get_or_init(squad.id)
-    columns = build_columns(rule)
+    squad = Squads.get_squad!(id)
+    items = Squads.list_work_items(squad.id)
+    iterations = Squads.list_iterations(squad.id)
+    areas = Squads.list_areas(squad.id)
+    columns = Squads.board_columns(squad.id)
 
     {:ok,
      assign(socket,
        squad: squad,
-       active_sprint: sprint,
-       all_sprints: all_sprints,
-       work_items: work_items,
+       items: items,
+       iterations: iterations,
+       areas: areas,
        columns: columns,
-       columns_source: column_source(rule),
-       type_colors: @type_colors,
+       sprint_lookup: Map.new(iterations, &{&1.id, &1}),
+       filters: %{area: nil, iteration_id: nil},
        page_title: squad.name,
        current_path: "/squads/#{id}"
      )}
   end
 
   @impl true
-  def handle_event("move", %{"item-id" => id, "status" => new_status}, socket) do
-    item = Squads.get_work_item!(id)
+  def handle_event("filter", %{"area" => area, "iteration_id" => iter}, socket) do
+    filters = %{area: blank_to_nil(area), iteration_id: parse_int(iter)}
+    {:noreply, assign(socket, filters: filters)}
+  end
 
-    case Squads.move_work_item(item, new_status) do
-      {:ok, updated} ->
-        items =
-          Enum.map(socket.assigns.work_items, fn i ->
-            if i.id == updated.id, do: updated, else: i
-          end)
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(v), do: v
 
-        {:noreply, assign(socket, work_items: items)}
+  defp parse_int(nil), do: nil
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Não foi possível mover o item.")}
+  defp parse_int(v) do
+    case Integer.parse(v) do
+      {n, _} -> n
+      _ -> nil
     end
   end
 
-  # --- Column resolution ---
+  # --- Filtering / aggregation (in-memory) ---
 
-  defp column_source(rule) do
-    azure_cols = get_in(rule.workflow, ["columns"])
-
-    if is_list(azure_cols) and azure_cols != [],
-      do: :azure,
-      else: :default
+  defp apply_filters(items, filters) do
+    items
+    |> filter_area(filters.area)
+    |> filter_iteration(filters.iteration_id)
   end
 
-  defp build_columns(rule) do
-    azure_cols = get_in(rule.workflow, ["columns"])
-    status_mapping = get_in(rule.field_mapping, ["status"]) || %{}
+  defp filter_area(items, nil), do: items
+  defp filter_area(items, area), do: Enum.filter(items, &(&1.area_path == area))
 
-    case azure_cols do
-      cols when is_list(cols) and cols != [] ->
-        Enum.map(cols, &translate_column(&1, status_mapping))
+  defp filter_iteration(items, nil), do: items
+  defp filter_iteration(items, id), do: Enum.filter(items, &(&1.sprint_id == id))
 
-      _ ->
-        @default_columns
-    end
-  end
+  defp sum_points(items), do: items |> Enum.map(&(&1.story_points || 0)) |> Enum.sum()
 
-  defp translate_column(col, status_mapping) do
-    azure_states = Map.get(col, "states") || []
-
-    local_statuses =
-      azure_states
-      |> Enum.map(&Map.get(status_mapping, &1, String.downcase(&1)))
-      |> Enum.uniq()
-
-    %{
-      name: col["name"] || "—",
-      local_statuses: local_statuses,
-      badge_class: badge_for_column_type(col["column_type"]),
-      column_type: col["column_type"] || "inProgress",
-      item_limit: col["item_limit"]
-    }
-  end
-
-  defp badge_for_column_type("incoming"), do: "badge-warning"
-  defp badge_for_column_type("outgoing"), do: "badge-success"
-  defp badge_for_column_type(_), do: "badge-info"
-
-  defp items_in_column(items, column),
-    do: Enum.filter(items, &(&1.status in column.local_statuses))
-
-  defp next_local_status(columns, current_status) do
-    statuses = Enum.flat_map(columns, & &1.local_statuses)
-    idx = Enum.find_index(statuses, &(&1 == current_status))
-
-    if idx && idx < length(statuses) - 1,
-      do: Enum.at(statuses, idx + 1),
-      else: nil
-  end
+  defp count_in_column(items, col),
+    do: Enum.count(items, &(&1.status in col.local_statuses))
 
   @impl true
   def render(assigns) do
+    filtered = apply_filters(assigns.items, assigns.filters)
+
+    by_area =
+      assigns.items
+      |> filter_iteration(assigns.filters.iteration_id)
+      |> Enum.group_by(&(&1.area_path || "— sem área —"))
+      |> Enum.map(fn {area, its} -> {area, length(its), sum_points(its)} end)
+      |> Enum.sort_by(fn {area, _, _} -> area end)
+
+    by_iteration =
+      assigns.items
+      |> filter_area(assigns.filters.area)
+      |> Enum.group_by(& &1.sprint_id)
+
+    assigns =
+      assign(assigns,
+        filtered: filtered,
+        by_area: by_area,
+        by_iteration: by_iteration,
+        total: length(filtered),
+        total_points: sum_points(filtered)
+      )
+
     ~H"""
-    <div class="max-w-full mx-auto space-y-4">
+    <div class="max-w-6xl mx-auto space-y-5">
       <div class="flex items-center gap-3 flex-wrap">
         <a href={~p"/"} class="btn btn-ghost btn-sm">← Dashboard</a>
         <div class="flex items-center gap-2">
           <div class="w-3 h-3 rounded-full" style={"background-color: #{@squad.color}"}></div>
           <h1 class="text-xl font-bold">{@squad.name}</h1>
         </div>
-        <div :if={@active_sprint} class="badge badge-outline">
-          {@active_sprint.name}
-          <span :if={@active_sprint.end_date} class="ml-1 opacity-60">
-            · até {Calendar.strftime(@active_sprint.end_date, "%d/%m")}
-          </span>
-        </div>
-        <div :if={!@active_sprint} class="badge badge-warning badge-outline">Sem sprint ativo</div>
-
-        <div :if={@columns_source == :azure} class="badge badge-success badge-sm gap-1">
-          <.icon name="hero-cloud" class="size-3" /> Colunas do Azure
-        </div>
-        <div :if={@columns_source == :default} class="badge badge-ghost badge-sm gap-1">
-          <.icon name="hero-cog-6-tooth" class="size-3" /> Colunas padrão
-        </div>
+        <span class="badge badge-ghost badge-sm">{@total} itens</span>
+        <span class="badge badge-ghost badge-sm">{@total_points} pts</span>
+        <div class="flex-1"></div>
+        <a href={~p"/squads/#{@squad.id}/rules"} class="btn btn-ghost btn-sm">
+          <.icon name="hero-shield-check" class="size-4" /> Regras
+        </a>
+        <a href={~p"/backlog?squad_id=#{@squad.id}"} class="btn btn-ghost btn-sm">
+          <.icon name="hero-clipboard-document-list" class="size-4" /> Backlog
+        </a>
       </div>
 
-      <div
-        class="grid gap-3 overflow-x-auto"
-        style={"grid-template-columns: repeat(#{length(@columns)}, minmax(12rem, 1fr));"}
-      >
-        <div :for={col <- @columns} class="flex flex-col gap-2 min-w-48">
-          <div class="flex items-center justify-between px-1">
-            <span class={"badge #{col.badge_class} badge-sm"}>{col.name}</span>
-            <div class="flex items-center gap-1 text-xs">
-              <span
-                :if={col.item_limit}
-                class={[
-                  "text-base-content/50",
-                  Enum.count(items_in_column(@work_items, col)) > col.item_limit &&
-                    "text-error font-bold"
-                ]}
+      <%!-- Filtros --%>
+      <form phx-change="filter" class="card bg-base-100 shadow p-4">
+        <div class="flex flex-wrap gap-3">
+          <div class="form-control flex-1 min-w-44">
+            <label class="label py-1"><span class="label-text text-xs">Área</span></label>
+            <select name="area" class="select select-bordered select-sm">
+              <option value="">Todas as áreas</option>
+              <option :for={a <- @areas} value={a} selected={@filters.area == a}>
+                {short_area(a)}
+              </option>
+            </select>
+          </div>
+          <div class="form-control flex-1 min-w-44">
+            <label class="label py-1"><span class="label-text text-xs">Iteration</span></label>
+            <select name="iteration_id" class="select select-bordered select-sm">
+              <option value="">Todas as iterations</option>
+              <option
+                :for={it <- @iterations}
+                value={it.id}
+                selected={@filters.iteration_id == it.id}
               >
-                {Enum.count(items_in_column(@work_items, col))}/{col.item_limit}
-              </span>
-              <span :if={!col.item_limit} class="text-base-content/50">
-                {Enum.count(items_in_column(@work_items, col))}
-              </span>
+                {it.name} ({it.kind})
+              </option>
+            </select>
+          </div>
+        </div>
+      </form>
+
+      <%!-- Contagens por fila do Kanban (filtradas pelos filtros acima) --%>
+      <div>
+        <h2 class="text-sm font-semibold text-base-content/60 mb-2 uppercase tracking-wide">
+          Filas do Kanban
+        </h2>
+        <div
+          class="grid gap-3"
+          style={"grid-template-columns: repeat(#{length(@columns)}, minmax(8rem, 1fr));"}
+        >
+          <div :for={col <- @columns} class="card bg-base-100 shadow">
+            <div class="card-body p-4 items-center text-center gap-1">
+              <span class={"badge badge-sm #{column_badge(col.column_type)}"}>{col.name}</span>
+              <div class="text-2xl font-bold">{count_in_column(@filtered, col)}</div>
+              <div :if={col.item_limit} class="text-xs text-base-content/40">
+                limite {col.item_limit}
+              </div>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div class="flex flex-col gap-2 min-h-24">
-            <.work_item_card
-              :for={item <- items_in_column(@work_items, col)}
-              item={item}
-              type_colors={@type_colors}
-              next_status={next_local_status(@columns, item.status)}
-            />
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <%!-- Por Área --%>
+        <div class="card bg-base-100 shadow">
+          <div class="card-body gap-3">
+            <h2 class="card-title text-base">
+              <.icon name="hero-squares-2x2" class="size-5" /> Itens por Área
+            </h2>
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Área</th>
+                  <th class="text-right">Itens</th>
+                  <th class="text-right">Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :if={@by_area == []}>
+                  <td colspan="3" class="text-center text-base-content/40 py-4">Sem dados</td>
+                </tr>
+                <tr :for={{area, count, pts} <- @by_area} class="hover">
+                  <td class="text-sm">{short_area(area)}</td>
+                  <td class="text-right">{count}</td>
+                  <td class="text-right text-base-content/60">{pts}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <%!-- Por Iteration --%>
+        <div class="card bg-base-100 shadow">
+          <div class="card-body gap-3">
+            <h2 class="card-title text-base">
+              <.icon name="hero-calendar-days" class="size-5" /> Itens por Iteration
+            </h2>
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Iteration</th>
+                  <th>Tipo</th>
+                  <th class="text-right">Itens</th>
+                  <th class="text-right">Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={it <- @iterations} class="hover">
+                  <td class="text-sm">{it.name}</td>
+                  <td>
+                    <span class={"badge badge-xs #{if it.kind == "sprint", do: "badge-primary", else: "badge-ghost"}"}>
+                      {it.kind}
+                    </span>
+                  </td>
+                  <td class="text-right">{length(Map.get(@by_iteration, it.id, []))}</td>
+                  <td class="text-right text-base-content/60">
+                    {sum_points(Map.get(@by_iteration, it.id, []))}
+                  </td>
+                </tr>
+                <tr :if={Map.get(@by_iteration, nil, []) != []} class="hover opacity-70">
+                  <td class="text-sm italic">— sem iteration —</td>
+                  <td></td>
+                  <td class="text-right">{length(Map.get(@by_iteration, nil, []))}</td>
+                  <td class="text-right text-base-content/60">
+                    {sum_points(Map.get(@by_iteration, nil, []))}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -203,40 +231,11 @@ defmodule SquadOpsWeb.SquadLive do
     """
   end
 
-  attr :item, :map, required: true
-  attr :type_colors, :map, required: true
-  attr :next_status, :string, default: nil
+  defp column_badge("incoming"), do: "badge-warning"
+  defp column_badge("outgoing"), do: "badge-success"
+  defp column_badge(_), do: "badge-info"
 
-  defp work_item_card(assigns) do
-    ~H"""
-    <div class="card bg-base-100 shadow-sm border border-base-200 hover:border-base-300 transition-colors">
-      <div class="card-body p-3 gap-2">
-        <p class="text-sm font-medium leading-snug">{@item.title}</p>
-        <div class="flex items-center justify-between gap-1 flex-wrap">
-          <div class="flex items-center gap-1">
-            <span class={"badge badge-xs #{Map.get(@type_colors, @item.type, "badge-ghost")}"}>
-              {@item.type}
-            </span>
-            <span :if={@item.story_points} class="badge badge-xs badge-ghost">
-              {@item.story_points}pts
-            </span>
-          </div>
-          <span :if={@item.assigned_to} class="text-xs text-base-content/50 truncate max-w-24">
-            {@item.assigned_to}
-          </span>
-        </div>
-        <div :if={@next_status} class="pt-1 border-t border-base-200">
-          <button
-            phx-click="move"
-            phx-value-item-id={@item.id}
-            phx-value-status={@next_status}
-            class="btn btn-xs btn-ghost w-full"
-          >
-            Mover →
-          </button>
-        </div>
-      </div>
-    </div>
-    """
-  end
+  # Mostra só o último segmento do Area Path para caber na tela.
+  defp short_area(nil), do: "—"
+  defp short_area(path), do: path |> String.split("\\") |> List.last()
 end
